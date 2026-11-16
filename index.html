@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>木版・リノカット 彫り跡デザインプランナー</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #1a1a2e; color: #e0e0e0; font-family: 'Hiragino Kana Gothic Pro', 'Meiryo', sans-serif; }
+  canvas { cursor: crosshair; display: block; }
+  .tool-btn { transition: all 0.2s; }
+  .tool-btn.active { ring: 2px; }
+  .layer-btn.active { background: #4a9eff; color: #000; }
+  input[type=range] { accent-color: #4a9eff; }
+  input[type=color] { width: 36px; height: 28px; padding: 1px; border-radius: 4px; cursor: pointer; border: 1px solid #555; background: #333; }
+  .panel { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; }
+  #composite-canvas { border: 2px solid #333; }
+  .slider-row { display: flex; align-items: center; gap: 8px; }
+  .slider-row label { min-width: 80px; font-size: 12px; color: #aaa; }
+</style>
+</head>
+<body class="min-h-screen p-2">
+<div class="max-w-7xl mx-auto">
+  <h1 class="text-xl font-bold text-center py-3 text-yellow-300">木版・リノカット 彫り跡デザインプランナー</h1>
+
+  <div class="flex flex-wrap gap-2">
+    <!-- Left panel: Tools -->
+    <div class="panel p-3 flex flex-col gap-3" style="min-width:180px; max-width:200px;">
+      <div>
+        <div class="text-xs text-gray-400 mb-1 font-semibold">ツール</div>
+        <div class="grid grid-cols-2 gap-1">
+          <button id="tool-brush" class="tool-btn active bg-blue-700 text-white text-xs px-2 py-1 rounded" aria-pressed="true">ブラシ</button>
+          <button id="tool-eraser" class="tool-btn bg-gray-700 text-white text-xs px-2 py-1 rounded" aria-pressed="false">消しゴム</button>
+          <button id="tool-rect" class="tool-btn bg-gray-700 text-white text-xs px-2 py-1 rounded" aria-pressed="false">矩形</button>
+          <button id="tool-circle" class="tool-btn bg-gray-700 text-white text-xs px-2 py-1 rounded" aria-pressed="false">円形</button>
+          <button id="tool-line" class="tool-btn bg-gray-700 text-white text-xs px-2 py-1 rounded" aria-pressed="false">直線</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-xs text-gray-400 mb-1 font-semibold">ブラシサイズ</div>
+        <input type="range" id="brush-size" min="2" max="40" value="8" class="w-full">
+        <div class="text-xs text-center text-gray-400" id="brush-size-label">8px</div>
+      </div>
+
+      <div>
+        <div class="text-xs text-gray-400 mb-1 font-semibold">描画色</div>
+        <div class="flex gap-2">
+          <button id="draw-black" class="w-8 h-8 bg-black border-2 border-blue-400 rounded" title="黒（未彫り）" aria-label="黒（未彫り）"></button>
+          <button id="draw-white" class="w-8 h-8 bg-white border border-gray-500 rounded" title="白（彫り済み）" aria-label="白（彫り済み）"></button>
+        </div>
+        <div class="text-xs text-gray-500 mt-1">黒=印刷 白=彫り</div>
+      </div>
+
+      <div>
+        <div class="text-xs text-gray-400 mb-1 font-semibold">ズーム</div>
+        <div class="flex gap-1">
+          <button id="zoom-1" class="bg-gray-700 text-white text-xs px-2 py-1 rounded flex-1">1x</button>
+          <button id="zoom-2" class="bg-gray-700 text-white text-xs px-2 py-1 rounded flex-1">2x</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-xs text-gray-400 mb-1 font-semibold">ミラー</div>
+        <div class="flex gap-1 flex-wrap">
+          <button id="mirror-h" class="bg-gray-700 text-white text-xs px-1 py-1 rounded">↔水平</button>
+          <button id="mirror-v" class="bg-gray-700 text-white text-xs px-1 py-1 rounded">↕垂直</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-xs text-gray-400 mb-1 font-semibold">操作</div>
+        <div class="flex flex-col gap-1">
+          <button id="clear-layer" class="bg-red-900 hover:bg-red-700 text-white text-xs px-2 py-1 rounded">レイヤーをクリア</button>
+          <button id="clear-all" class="bg-red-800 hover:bg-red-600 text-white text-xs px-2 py-1 rounded">全消去</button>
+          <button id="neg-pos" class="bg-purple-800 hover:bg-purple-600 text-white text-xs px-2 py-1 rounded">ネガポジ反転</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: Canvas area -->
+    <div class="flex flex-col gap-2 flex-1" style="min-width:300px;">
+      <!-- Layer + Color controls -->
+      <div class="panel p-2">
+        <div class="flex flex-wrap gap-2 items-center">
+          <div>
+            <div class="text-xs text-gray-400 mb-1">カラーモード</div>
+            <div class="flex gap-1">
+              <button id="mode-mono" class="text-xs px-2 py-1 rounded bg-blue-700 text-white active-mode">モノクロ</button>
+              <button id="mode-2color" class="text-xs px-2 py-1 rounded bg-gray-700 text-white">2色</button>
+              <button id="mode-3color" class="text-xs px-2 py-1 rounded bg-gray-700 text-white">3色</button>
+            </div>
+          </div>
+          <div id="layer-controls">
+            <div class="text-xs text-gray-400 mb-1">編集レイヤー</div>
+            <div class="flex gap-1">
+              <button id="layer-1" class="layer-btn active text-xs px-2 py-1 rounded bg-blue-700 text-white">版1</button>
+              <button id="layer-2" class="layer-btn text-xs px-2 py-1 rounded bg-gray-700 text-white hidden">版2</button>
+              <button id="layer-3" class="layer-btn text-xs px-2 py-1 rounded bg-gray-700 text-white hidden">版3</button>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-3 mt-2" id="ink-color-row">
+          <div class="flex items-center gap-1">
+            <label class="text-xs text-gray-400" for="ink1">版1インク色:</label>
+            <input type="color" id="ink1" value="#000000" aria-label="版1インク色">
+          </div>
+          <div class="flex items-center gap-1 hidden" id="ink2-row">
+            <label class="text-xs text-gray-400" for="ink2">版2インク色:</label>
+            <input type="color" id="ink2" value="#cc2200" aria-label="版2インク色">
+          </div>
+          <div class="flex items-center gap-1 hidden" id="ink3-row">
+            <label class="text-xs text-gray-400" for="ink3">版3インク色:</label>
+            <input type="color" id="ink3" value="#003388" aria-label="版3インク色">
+          </div>
+          <div class="flex items-center gap-1">
+            <label class="text-xs text-gray-400" for="paper-color">紙の色:</label>
+            <select id="paper-color" class="bg-gray-700 text-white text-xs px-1 py-1 rounded" aria-label="紙の色">
+              <option value="#ffffff">白</option>
+              <option value="#f5f0e8">クリーム</option>
+              <option value="#cccccc">グレー</option>
+              <option value="#111111">黒</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-2">
+          <div class="slider-row">
+            <label for="layer-opacity">レイヤー透明度:</label>
+            <input type="range" id="layer-opacity" min="10" max="100" value="80" class="flex-1">
+            <span class="text-xs text-gray-400 w-8" id="opacity-label">80%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drawing canvas -->
+      <div class="panel p-2 overflow-auto">
+        <div class="text-xs text-gray-400 mb-1">描画キャンバス（黒=インク付き部分 / 白=彫り込み部分）</div>
+        <div id="canvas-wrapper" style="overflow:auto; max-height:460px;">
+          <canvas id="drawing-canvas" width="400" height="400" style="border:2px solid #444; background:#fff;" aria-label="描画キャンバス"></canvas>
+        </div>
+      </div>
+
+      <!-- Download buttons -->
+      <div class="panel p-2">
+        <div class="text-xs text-gray-400 mb-1">ダウンロード</div>
+        <div class="flex flex-wrap gap-1">
+          <button id="dl-layer1" class="bg-green-800 hover:bg-green-700 text-white text-xs px-2 py-1 rounded">版1 PNG</button>
+          <button id="dl-layer2" class="bg-green-800 hover:bg-green-700 text-white text-xs px-2 py-1 rounded hidden">版2 PNG</button>
+          <button id="dl-layer3" class="bg-green-800 hover:bg-green-700 text-white text-xs px-2 py-1 rounded hidden">版3 PNG</button>
+          <button id="dl-composite" class="bg-green-700 hover:bg-green-600 text-white text-xs px-2 py-1 rounded">合成PNG</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Preview panels -->
+    <div class="flex flex-col gap-2" style="min-width:220px; max-width:260px;">
+      <div class="panel p-2">
+        <div class="text-xs text-gray-400 mb-1 font-semibold">印刷プレビュー（合成）</div>
+        <canvas id="composite-canvas" width="200" height="200" style="border:2px solid #444;" aria-label="合成プレビュー"></canvas>
+      </div>
+      <div class="panel p-2">
+        <div class="text-xs text-gray-400 mb-1 font-semibold">ネガポジ反転プレビュー</div>
+        <canvas id="negpos-canvas" width="200" height="200" style="border:2px solid #444;" aria-label="ネガポジ反転プレビュー"></canvas>
+      </div>
+      <div class="panel p-2">
+        <div class="text-xs text-gray-400 mb-1 font-semibold">版1 プレビュー</div>
+        <canvas id="layer1-preview" width="200" height="200" style="border:1px solid #333;" aria-label="版1プレビュー"></canvas>
+      </div>
+      <div class="panel p-2 hidden" id="layer2-preview-panel">
+        <div class="text-xs text-gray-400 mb-1 font-semibold">版2 プレビュー</div>
+        <canvas id="layer2-preview" width="200" height="200" style="border:1px solid #333;" aria-label="版2プレビュー"></canvas>
+      </div>
+      <div class="panel p-2 hidden" id="layer3-preview-panel">
+        <div class="text-xs text-gray-400 mb-1 font-semibold">版3 プレビュー</div>
+        <canvas id="layer3-preview" width="200" height="200" style="border:1px solid #333;" aria-label="版3プレビュー"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const canvas = document.getElementById('drawing-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = 400, H = 400;
+
+  // State
+  let currentTool = 'brush';
+  let drawColor = '#000000';
+  let brushSize = 8;
+  let isDrawing = false;
+  let startX = 0, startY = 0;
+  let currentLayer = 0;
+  let colorMode = 'mono';
+  let zoomLevel = 1;
+  let layerOpacity = 0.8;
+  let negPosActive = false;
+  let mirrorH = false, mirrorV = false;
+  let snapshot = null; // for shape tools
+
+  // 3 layers, each stored as ImageData
+  const layers = [
+    createBlankLayer(),
+    createBlankLayer(),
+    createBlankLayer()
+  ];
+
+  function createBlankLayer() {
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const cx = c.getContext('2d');
+    cx.fillStyle = '#ffffff';
+    cx.fillRect(0, 0, W, H);
+    return c;
+  }
+
+  function getInkColor(idx) {
+    const ids = ['ink1','ink2','ink3'];
+    return document.getElementById(ids[idx]).value;
+  }
+
+  function getPaperColor() {
+    return document.getElementById('paper-color').value;
+  }
+
+  // Load current layer onto canvas
+  function loadLayer(idx) {
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(layers[idx], 0, 0);
+  }
+
+  // Save current canvas to layer
+  function saveLayer(idx) {
+    const lctx = layers[idx].getContext('2d');
+    lctx.clearRect(0, 0, W, H);
+    lctx.drawImage(canvas, 0, 0);
+  }
+
+  // ---- Tool selection ----
+  const tools = ['brush','eraser','rect','circle','line'];
+  tools.forEach(t => {
+    document.getElementById('tool-'+t).addEventListener('click', () => {
+      currentTool = t;
+      tools.forEach(x => {
+        const btn = document.getElementById('tool-'+x);
+        btn.classList.toggle('bg-blue-700', x === t);
+        btn.classList.toggle('bg-gray-700', x !== t);
+        btn.setAttribute('aria-pressed', x === t ? 'true' : 'false');
+      });
+    });
+  });
+
+  // Draw color
+  document.getElementById('draw-black').addEventListener('click', () => { drawColor = '#000000'; });
+  document.getElementById('draw-white').addEventListener('click', () => { drawColor = '#ffffff'; });
+
+  // Brush size
+  const brushSizeInput = document.getElementById('brush-size');
+  brushSizeInput.addEventListener('input', () => {
+    brushSize = parseInt(brushSizeInput.value);
+    document.getElementById('brush-size-label').textContent = brushSize + 'px';
+  });
+
+  // Zoom
+  document.getElementById('zoom-1').addEventListener('click', () => { zoomLevel = 1; applyZoom(); });
+  document.getElementById('zoom-2').addEventListener('click', () => { zoomLevel = 2; applyZoom(); });
+  function applyZoom() {
+    canvas.style.width = (W * zoomLevel) + 'px';
+    canvas.style.height = (H * zoomLevel) + 'px';
+  }
+
+  // Mirror
+  document.getElementById('mirror-h').addEventListener('click', () => {
+    mirrorH = !mirrorH;
+    document.getElementById('mirror-h').classList.toggle('bg-blue-700', mirrorH);
+    document.getElementById('mirror-h').classList.toggle('bg-gray-700', !mirrorH);
+  });
+  document.getElementById('mirror-v').addEventListener('click', () => {
+    mirrorV = !mirrorV;
+    document.getElementById('mirror-v').classList.toggle('bg-blue-700', mirrorV);
+    document.getElementById('mirror-v').classList.toggle('bg-gray-700', !mirrorV);
+  });
+
+  // Neg/Pos
+  document.getElementById('neg-pos').addEventListener('click', () => {
+    negPosActive = !negPosActive;
+    document.getElementById('neg-pos').classList.toggle('bg-purple-500', negPosActive);
+    updatePreviews();
+  });
+
+  // Clear
+  document.getElementById('clear-layer').addEventListener('click', () => {
+    const lctx = layers[currentLayer].getContext('2d');
+    lctx.fillStyle = '#ffffff';
+    lctx.fillRect(0, 0, W, H);
+    loadLayer(currentLayer);
+    updatePreviews();
+  });
+
+  document.getElementById('clear-all').addEventListener('click', () => {
+    layers.forEach(l => {
+      const lctx = l.getContext('2d');
+      lctx.fillStyle = '#ffffff';
+      lctx.fillRect(0, 0, W, H);
+    });
+    loadLayer(currentLayer);
+    updatePreviews();
+  });
+
+  // Color mode
+  ['mono','2color','3color'].forEach(mode => {
+    document.getElementById('mode-'+mode).addEventListener('click', () => {
+      colorMode = mode;
+      ['mono','2color','3color'].forEach(m => {
+        document.getElementById('mode-'+m).classList.toggle('bg-blue-700', m === mode);
+        document.getElementById('mode-'+m).classList.toggle('bg-gray-700', m !== mode);
+      });
+      updateLayerUI();
+      updatePreviews();
+    });
+  });
+
+  // Layer selection
+  [1,2,3].forEach(i => {
+    document.getElementById('layer-'+i).addEventListener('click', () => {
+      saveLayer(currentLayer);
+      currentLayer = i - 1;
+      loadLayer(currentLayer);
+      [1,2,3].forEach(j => {
+        document.getElementById('layer-'+j).classList.toggle('bg-blue-700', j === i);
+        document.getElementById('layer-'+j).classList.toggle('bg-gray-700', j !== i);
+      });
+    });
+  });
+
+  function updateLayerUI() {
+    const show2 = colorMode === '2color' || colorMode === '3color';
+    const show3 = colorMode === '3color';
+    document.getElementById('layer-2').classList.toggle('hidden', !show2);
+    document.getElementById('layer-3').classList.toggle('hidden', !show3);
+    document.getElementById('ink2-row').classList.toggle('hidden', !show2);
+    document.getElementById('ink3-row').classList.toggle('hidden', !show3);
+    document.getElementById('layer2-preview-panel').classList.toggle('hidden', !show2);
+    document.getElementById('layer3-preview-panel').classList.toggle('hidden', !show3);
+    document.getElementById('dl-layer2').classList.toggle('hidden', !show2);
+    document.getElementById('dl-layer3').classList.toggle('hidden', !show3);
+  }
+
+  // Opacity
+  const opacityInput = document.getElementById('layer-opacity');
+  opacityInput.addEventListener('input', () => {
+    layerOpacity = parseInt(opacityInput.value) / 100;
+    document.getElementById('opacity-label').textContent = opacityInput.value + '%';
+    updatePreviews();
+  });
+
+  // Paper/ink color changes → update previews
+  ['paper-color','ink1','ink2','ink3'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updatePreviews);
+    document.getElementById(id).addEventListener('change', updatePreviews);
+  });
+
+  // ---- Canvas drawing ----
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W / rect.width;
+    const scaleY = H / rect.height;
+    let clientX, clientY;
+    if (e.touches) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  }
+
+  function drawPoint(x, y) {
+    ctx.fillStyle = currentTool === 'eraser' ? '#ffffff' : drawColor;
+    ctx.beginPath();
+    ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+    ctx.fill();
+    if (mirrorH) {
+      ctx.beginPath();
+      ctx.arc(W - x, y, brushSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (mirrorV) {
+      ctx.beginPath();
+      ctx.arc(x, H - y, brushSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (mirrorH && mirrorV) {
+      ctx.beginPath();
+      ctx.arc(W - x, H - y, brushSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawShapePreview(x, y) {
+    ctx.putImageData(snapshot, 0, 0);
+    ctx.strokeStyle = currentTool === 'eraser' ? '#ffffff' : drawColor;
+    ctx.fillStyle = currentTool === 'eraser' ? '#ffffff' : drawColor;
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = 'round';
+
+    if (currentTool === 'rect') {
+      ctx.strokeRect(startX, startY, x - startX, y - startY);
+    } else if (currentTool === 'circle') {
+      const rx = Math.abs(x - startX) / 2;
+      const ry = Math.abs(y - startY) / 2;
+      const cx = startX + (x - startX) / 2;
+      const cy = startY + (y - startY) / 2;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (currentTool === 'line') {
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+  }
+
+  function onPointerDown(e) {
+    e.preventDefault();
+    isDrawing = true;
+    const pos = getCanvasPos(e);
+    startX = pos.x; startY = pos.y;
+    if (currentTool === 'brush' || currentTool === 'eraser') {
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+      drawPoint(pos.x, pos.y);
+    } else {
+      snapshot = ctx.getImageData(0, 0, W, H);
+    }
+  }
+
+  function onPointerMove(e) {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const pos = getCanvasPos(e);
+    if (currentTool === 'brush' || currentTool === 'eraser') {
+      ctx.strokeStyle = currentTool === 'eraser' ? '#ffffff' : drawColor;
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      startX = pos.x; startY = pos.y;
+    } else {
+      drawShapePreview(pos.x, pos.y);
+    }
+  }
+
+  function onPointerUp(e) {
+    if (!isDrawing) return;
+    isDrawing = false;
+    if (currentTool !== 'brush' && currentTool !== 'eraser') {
+      const pos = getCanvasPos(e);
+      drawShapePreview(pos.x, pos.y);
+    }
+    saveLayer(currentLayer);
+    updatePreviews();
+  }
+
+  canvas.addEventListener('mousedown', onPointerDown);
+  canvas.addEventListener('mousemove', onPointerMove);
+  canvas.addEventListener('mouseup', onPointerUp);
+  canvas.addEventListener('mouseleave', onPointerUp);
+  canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+  canvas.addEventListener('touchmove', onPointerMove, { passive: false });
+  canvas.addEventListener('touchend', onPointerUp);
+
+  // ---- Preview rendering ----
+  function renderLayerPreview(canvasEl, layerIdx, inkColor, paper) {
+    const pc = canvasEl.getContext('2d');
+    pc.fillStyle = paper;
+    pc.fillRect(0, 0, 200, 200);
+    // Scale down layer to 200x200
+    const tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width = 200; tmpCanvas.height = 200;
+    const tmpCtx = tmpCanvas.getContext('2d');
+    tmpCtx.drawImage(layers[layerIdx], 0, 0, 200, 200);
+    const imgData = tmpCtx.getImageData(0, 0, 200, 200);
+    const ink = hexToRgb(inkColor);
+    const paperRgb = hexToRgb(paper);
+    for (let i = 0; i < imgData.data.length; i += 4) {
+      const brightness = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
+      const t = brightness / 255; // 0=black(inked), 1=white(carved)
+      imgData.data[i]   = Math.round(paperRgb.r * t + ink.r * (1 - t));
+      imgData.data[i+1] = Math.round(paperRgb.g * t + ink.g * (1 - t));
+      imgData.data[i+2] = Math.round(paperRgb.b * t + ink.b * (1 - t));
+      imgData.data[i+3] = 255;
+    }
+    pc.putImageData(imgData, 0, 0);
+  }
+
+  function renderComposite(canvasEl) {
+    const pc = canvasEl.getContext('2d');
+    const paper = getPaperColor();
+    pc.fillStyle = paper;
+    pc.fillRect(0, 0, 200, 200);
+
+    const numLayers = colorMode === 'mono' ? 1 : colorMode === '2color' ? 2 : 3;
+    for (let li = 0; li < numLayers; li++) {
+      const ink = getInkColor(li);
+      const tmpC = document.createElement('canvas');
+      tmpC.width = 200; tmpC.height = 200;
+      const tmpCtx = tmpC.getContext('2d');
+      tmpCtx.drawImage(layers[li], 0, 0, 200, 200);
+      const imgData = tmpCtx.getImageData(0, 0, 200, 200);
+      const inkRgb = hexToRgb(ink);
+      // Convert black pixels to ink color, white to transparent
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        const brightness = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
+        const alpha = Math.round((1 - brightness / 255) * 255 * layerOpacity);
+        imgData.data[i]   = inkRgb.r;
+        imgData.data[i+1] = inkRgb.g;
+        imgData.data[i+2] = inkRgb.b;
+        imgData.data[i+3] = alpha;
+      }
+      tmpCtx.putImageData(imgData, 0, 0);
+      pc.drawImage(tmpC, 0, 0);
+    }
+  }
+
+  function renderNegPos(canvasEl) {
+    const pc = canvasEl.getContext('2d');
+    pc.fillStyle = '#ffffff';
+    pc.fillRect(0, 0, 200, 200);
+
+    const tmpC = document.createElement('canvas');
+    tmpC.width = 200; tmpC.height = 200;
+    const tmpCtx = tmpC.getContext('2d');
+
+    // Composite first
+    renderComposite(tmpC);
+    const imgData = tmpCtx.getImageData(0, 0, 200, 200);
+    for (let i = 0; i < imgData.data.length; i += 4) {
+      imgData.data[i]   = 255 - imgData.data[i];
+      imgData.data[i+1] = 255 - imgData.data[i+1];
+      imgData.data[i+2] = 255 - imgData.data[i+2];
+    }
+    pc.putImageData(imgData, 0, 0);
+  }
+
+  function updatePreviews() {
+    const paper = getPaperColor();
+    renderLayerPreview(document.getElementById('layer1-preview'), 0, getInkColor(0), paper);
+    if (colorMode !== 'mono') {
+      renderLayerPreview(document.getElementById('layer2-preview'), 1, getInkColor(1), paper);
+      if (colorMode === '3color') {
+        renderLayerPreview(document.getElementById('layer3-preview'), 2, getInkColor(2), paper);
+      }
+    }
+    renderComposite(document.getElementById('composite-canvas'));
+    renderNegPos(document.getElementById('negpos-canvas'));
+  }
+
+  function hexToRgb(hex) {
+    const r = parseInt(hex.slice(1,3),16);
+    const g = parseInt(hex.slice(3,5),16);
+    const b = parseInt(hex.slice(5,7),16);
+    return {r, g, b};
+  }
+
+  // ---- Downloads ----
+  function downloadCanvas(srcCanvas, filename) {
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = srcCanvas.toDataURL('image/png');
+    link.click();
+  }
+
+  document.getElementById('dl-layer1').addEventListener('click', () => {
+    const tmp = document.createElement('canvas');
+    tmp.width = W; tmp.height = H;
+    renderLayerPreview(tmp, 0, getInkColor(0), getPaperColor());
+    downloadCanvas(tmp, 'layer1.png');
+  });
+  document.getElementById('dl-layer2').addEventListener('click', () => {
+    const tmp = document.createElement('canvas');
+    tmp.width = W; tmp.height = H;
+    renderLayerPreview(tmp, 1, getInkColor(1), getPaperColor());
+    downloadCanvas(tmp, 'layer2.png');
+  });
+  document.getElementById('dl-layer3').addEventListener('click', () => {
+    const tmp = document.createElement('canvas');
+    tmp.width = W; tmp.height = H;
+    renderLayerPreview(tmp, 2, getInkColor(2), getPaperColor());
+    downloadCanvas(tmp, 'layer3.png');
+  });
+  document.getElementById('dl-composite').addEventListener('click', () => {
+    const tmp = document.createElement('canvas');
+    tmp.width = W; tmp.height = H;
+    // Full res composite
+    const pc = tmp.getContext('2d');
+    pc.fillStyle = getPaperColor();
+    pc.fillRect(0, 0, W, H);
+    const numLayers = colorMode === 'mono' ? 1 : colorMode === '2color' ? 2 : 3;
+    for (let li = 0; li < numLayers; li++) {
+      const ink = getInkColor(li);
+      const tmpC = document.createElement('canvas');
+      tmpC.width = W; tmpC.height = H;
+      const tmpCtx = tmpC.getContext('2d');
+      tmpCtx.drawImage(layers[li], 0, 0);
+      const imgData = tmpCtx.getImageData(0, 0, W, H);
+      const inkRgb = hexToRgb(ink);
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        const brightness = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
+        const alpha = Math.round((1 - brightness / 255) * 255);
+        imgData.data[i]   = inkRgb.r;
+        imgData.data[i+1] = inkRgb.g;
+        imgData.data[i+2] = inkRgb.b;
+        imgData.data[i+3] = alpha;
+      }
+      tmpCtx.putImageData(imgData, 0, 0);
+      pc.drawImage(tmpC, 0, 0);
+    }
+    downloadCanvas(tmp, 'composite.png');
+  });
+
+  // Init
+  loadLayer(0);
+  updatePreviews();
+})();
+</script>
+</body>
+</html>
